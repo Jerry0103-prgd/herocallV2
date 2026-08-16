@@ -380,12 +380,20 @@ if _static.exists():
         app.mount("/assets", StaticFiles(directory=_static / "assets"), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    def spa_fallback(full_path: str):  # noqa: ARG001
-        """所有未匹配路径回退到 index.html — React Router 接管。
+    def spa_fallback(full_path: str):
+        """提供前端静态文件；未匹配路径由 React Router 接管。
 
         index.html 禁止缓存 (Cache-Control: no-store), 确保浏览器每次拿到
         最新版本引用的 JS/CSS 文件名 (assets 带 hash, 可长缓存)。
         """
+        # Vite 的 public/ 文件会直接放在 dist 根目录（例如应用图标）。
+        # 桌面版不能把它们回退为 index.html，否则 <img> 会收到 HTML 而显示
+        # 为损坏图片。先解析并确认路径仍在静态目录内，避免路径穿越。
+        static_root = _static.resolve()
+        requested = (static_root / full_path).resolve()
+        if full_path and requested.is_relative_to(static_root) and requested.is_file():
+            return FileResponse(requested)
+
         index = _static / "index.html"
         if index.exists():
             return FileResponse(
