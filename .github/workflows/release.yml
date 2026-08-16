@@ -18,7 +18,7 @@ on:
       version:
         description: '版本号 (如 v0.1.33, 用作 Release tag 和标题)'
         required: true
-        default: 'v0.1.33'
+        default: 'v0.1.89'
       platforms:
         description: '要构建的平台 (逗号分隔: windows,macos,linux)'
         required: true
@@ -96,15 +96,13 @@ jobs:
       - name: 设置 Python
         run: uv python install 3.12
 
-      - name: 安装后端依赖 (含 desktop + legacy-cpu, 不含 backtest)
+      - name: 安装后端依赖 (含 desktop, 不含 backtest)
         working-directory: backend
-        # --no-dev 排除 pytest/ruff/mypy; --extra desktop 装 pywebview
-        # --extra legacy-cpu 装 polars[rtcompat] 运行时兼容内核:
-        #   让安装包同时兼容 AVX2 新 CPU 和无 AVX2 的老 CPU (NAS/老服务器/国产 CPU)。
-        #   rtcompat 会在运行时自动探测 CPU 能力 —— 有 AVX2 用 AVX2, 没有则回退,
-        #   对新 CPU 性能几乎无损 (Polars 1.x 官方推荐方案)。
-        # 不加 --extra backtest, 主包不含 vectorbt/numba/llvmlite
-        run: uv sync --no-dev --extra desktop --extra legacy-cpu
+        # --no-dev 排除 pytest/ruff/mypy; --extra desktop 装 pywebview。
+        # Windows 安装包不包含 legacy-cpu：当前 Polars rtcompat 运行时在部分
+        # Windows 环境会因 CPU 特性标志不兼容而无法导入（unknown feature flag）。
+        # 标准 x64 内核覆盖常见 Windows 电脑；不加 --extra backtest 以控制体积。
+        run: uv sync --no-dev --extra desktop
 
       - name: 安装 PyInstaller
         # 必须装进 backend 的 uv 环境 (pywebview/polars 等依赖都在那里),
@@ -135,14 +133,13 @@ jobs:
         working-directory: backend
         run: uv run pyinstaller ../packaging/tickflow.spec --noconfirm
 
-      - name: 检查 Polars 兼容内核 (仅 Windows)
+      - name: 检查 Polars 标准内核 (仅 Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           $runtimeRoot = 'backend/dist/HeroCall/_internal'
           $required = @(
-            '_polars_runtime_32/_polars_runtime.pyd',
-            '_polars_runtime_compat/_polars_runtime.pyd'
+            '_polars_runtime_32/_polars_runtime.pyd'
           )
           $missing = $required | Where-Object {
             -not (Test-Path (Join-Path $runtimeRoot $_))

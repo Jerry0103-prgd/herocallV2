@@ -322,6 +322,12 @@ def main() -> int:
         # 轮询 health 接口等后端就绪 (含 lifespan 初始化, 最多 60s)
         if not _wait_for_server(port, timeout=60.0):
             logger.error("后端启动超时, 桌面版退出")
+            _show_crash(
+                f"{_APP_NAME} 启动失败",
+                "本地服务未能启动。\n\n"
+                "请查看安装目录 data\\desktop.log 的最后几行，"
+                "并将日志内容反馈给支持人员。",
+            )
             _release_single_instance()
             return 1
 
