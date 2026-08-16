@@ -169,13 +169,15 @@ jobs:
         shell: pwsh
         run: |
           $exe = Resolve-Path 'backend/dist/HeroCall/HeroCall.exe'
-          & $exe --self-check
-          if ($LASTEXITCODE -ne 0) {
+          # HeroCall.exe 是 GUI 子系统程序；PowerShell 用调用运算符启动它时会
+          # 立即返回且 $LASTEXITCODE 为空。显式等待进程，才能读取真实退出码。
+          $process = Start-Process -FilePath $exe -ArgumentList '--self-check' -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
             $log = 'backend/dist/HeroCall/data/desktop.log'
             if (Test-Path $log) {
               Get-Content $log
             }
-            throw "打包后的 HERO CALL 自检失败，退出码: $LASTEXITCODE"
+            throw "打包后的 HERO CALL 自检失败，退出码: $($process.ExitCode)"
           }
 
       - name: 安装 Inno Setup (仅 Windows)
