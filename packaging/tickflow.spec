@@ -50,8 +50,8 @@ for pkg in ("polars", "pyarrow", "duckdb", "fastexcel"):
     hiddenimports += h
 
 # Polars 的发行包名为 polars-runtime-32 / polars-runtime-compat, 但实际
-# Python 导入包带前导下划线。release.yml 安装 legacy-cpu 后必须收集二者，
-# 否则 onedir 产物无法在没有 AVX2/FMA 的旧 CPU 上加载兼容内核。
+# Python 导入包带前导下划线。Windows 安装包强制使用 compat 内核，避免部分
+# Windows / 虚拟化 CPU 环境在标准内核的特性探测阶段闪退，故两者均需完整收集。
 for pkg in ("_polars_runtime_32", "_polars_runtime_compat"):
     if find_spec(pkg) is not None:
         rt_d, rt_b, rt_h = collect_all(pkg)
@@ -142,7 +142,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(ROOT / "packaging" / "runtime_hooks" / "polars_windows.py")],
     excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

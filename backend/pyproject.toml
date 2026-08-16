@@ -1,6 +1,6 @@
 [project]
 name = "tickflow-stock-panel-backend"
-version = "0.1.90"
+version = "0.1.91"
 description = "A 股选股 + 监控 + 回测面板 — TickFlow 适配"
 # 保持构建上下文自包含：Docker/uv 在 backend 目录同步时不能引用父目录文件。
 readme = { text = "HERO CALL backend service.", content-type = "text/markdown" }

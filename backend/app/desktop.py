@@ -31,15 +31,19 @@ _PORT_PROBE_RANGE = 50  # 从 3018 起最多试 50 个端口
 
 
 def _configure_windows_frozen_runtime() -> None:
-    """规避 Windows 冻结包中 Polars 的错误 CPU 特性检测。
+    """选择 Windows 冻结包中兼容性最高的 Polars 原生内核。
 
-    PyInstaller 打包的 Windows 环境会让 Polars 1.40 的 CPU 检测把已知的
-    ``sse3`` 标记误判为未知，导致应用在导入阶段直接退出。该开关只用于
-    Windows 桌面安装包；源码运行和其他平台仍保留 Polars 的默认检测。
+    标准 ``_polars_runtime_32`` 内核在部分 Windows 环境会把 ``sse3`` 误判
+    为未知，或在跳过检测后直接由原生模块退出。桌面安装包随附 compat 内核
+    并强制使用它；该内核面向不完整/虚拟化的 CPU 特性报告，避免启动期闪退。
+
+    这些变量只作用于 Windows 的 PyInstaller 安装包，源码运行和其他平台
+    仍使用 Polars 的默认内核选择策略。
     """
     if sys.platform == "win32" and getattr(sys, "frozen", False):
         import os
 
+        os.environ.setdefault("POLARS_FORCE_PKG", "compat")
         os.environ.setdefault("POLARS_SKIP_CPU_CHECK", "1")
 
 
@@ -221,9 +225,9 @@ def _find_free_port(start: int, count: int = _PORT_PROBE_RANGE) -> int:
 
 def _run_uvmicorn(port: int, ready_event: threading.Event) -> None:
     """后台线程: 启动 uvicorn 服务。ready_event 在线程退出时置位 (通知主线程)。"""
-    import uvicorn
-
     try:
+        import uvicorn
+
         # 延迟 import app, 确保配置层已就绪 (frozen 检测在 config.py 导入时完成)
         # 放进 try: app.main 模块导入 (含 app.api.* 一长串 import) 若失败,
         # 异常必须落到 except 记录, 否则主线程只看到「后端超时」而查无 traceback。
@@ -232,6 +236,8 @@ def _run_uvmicorn(port: int, ready_event: threading.Event) -> None:
         logger.exception("后端模块导入失败 (app.main 或其依赖)")
         ready_event.set()
         return
+
+    logger.info("后端模块导入完成，开始启动本地服务")
 
     config = uvicorn.Config(
         app,
@@ -297,6 +303,24 @@ def _open_window(url: str) -> None:
     webview.start(debug=False)
 
 
+def _run_self_check() -> int:
+    """验证冻结包的 Polars 原生内核和后端导入链，无需创建桌面窗口。"""
+    try:
+        import polars  # noqa: F401
+        import polars._plr as plr
+        from app.main import app  # noqa: F401
+
+        logger.info(
+            "安装包自检通过：Polars %s，原生内核 %s",
+            polars.__version__,
+            getattr(plr, "__file__", "<unknown>"),
+        )
+        return 0
+    except Exception:
+        logger.exception("安装包自检失败：后端或 Polars 原生内核无法加载")
+        return 2
+
+
 def main() -> int:
     """桌面客户端主入口。返回进程退出码。"""
     # 必须最先执行: console=False 下 stdout/stderr 可能无效, 不守护会导致
@@ -317,6 +341,9 @@ def main() -> int:
     except Exception:
         # 数据目录不可写是致命错误, 无法继续
         return 1
+
+    if "--self-check" in sys.argv:
+        return _run_self_check()
 
     # 单实例: 已运行则退出
     if not _acquire_single_instance():

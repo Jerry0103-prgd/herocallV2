@@ -24,7 +24,7 @@ on:
       version:
         description: '版本号 (如 v0.1.33, 用作 Release tag 和标题)'
         required: true
-        default: 'v0.1.90'
+        default: 'v0.1.91'
       platforms:
         description: '要构建的平台 (逗号分隔: windows,macos,linux)'
         required: true
@@ -111,13 +111,13 @@ jobs:
       - name: 设置 Python
         run: uv python install 3.12
 
-      - name: 安装后端依赖 (含 desktop, 不含 backtest)
+      - name: 安装后端依赖 (含 desktop 与兼容 Polars 内核, 不含 backtest)
         working-directory: backend
         # --no-dev 排除 pytest/ruff/mypy; --extra desktop 装 pywebview。
-        # Windows 安装包不包含 legacy-cpu：当前 Polars rtcompat 运行时在部分
-        # Windows 环境会因 CPU 特性标志不兼容而无法导入（unknown feature flag）。
-        # 标准 x64 内核覆盖常见 Windows 电脑；不加 --extra backtest 以控制体积。
-        run: uv sync --no-dev --extra desktop
+        # legacy-cpu 随附 Polars compat 内核；桌面入口会强制选它，以避免少数
+        # Windows / 虚拟 CPU 环境在标准内核的 sse3 特性检测阶段无法启动。
+        # 不加 --extra backtest 以控制体积。
+        run: uv sync --no-dev --extra desktop --extra legacy-cpu
 
       - name: 安装 PyInstaller
         # 必须装进 backend 的 uv 环境 (pywebview/polars 等依赖都在那里),
@@ -154,13 +154,28 @@ jobs:
         run: |
           $runtimeRoot = 'backend/dist/HeroCall/_internal'
           $required = @(
-            '_polars_runtime_32/_polars_runtime.pyd'
+            '_polars_runtime_32/_polars_runtime.pyd',
+            '_polars_runtime_compat/_polars_runtime.pyd'
           )
           $missing = $required | Where-Object {
             -not (Test-Path (Join-Path $runtimeRoot $_))
           }
           if ($missing) {
             throw "PyInstaller output is missing Polars runtime(s): $($missing -join ', ')"
+          }
+
+      - name: 自检打包后的 Windows 程序 (仅 Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'backend/dist/HeroCall/HeroCall.exe'
+          & $exe --self-check
+          if ($LASTEXITCODE -ne 0) {
+            $log = 'backend/dist/HeroCall/data/desktop.log'
+            if (Test-Path $log) {
+              Get-Content $log
+            }
+            throw "打包后的 HERO CALL 自检失败，退出码: $LASTEXITCODE"
           }
 
       - name: 安装 Inno Setup (仅 Windows)
