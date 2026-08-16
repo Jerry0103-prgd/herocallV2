@@ -30,6 +30,19 @@ _BASE_PORT = 3018
 _PORT_PROBE_RANGE = 50  # 从 3018 起最多试 50 个端口
 
 
+def _configure_windows_frozen_runtime() -> None:
+    """规避 Windows 冻结包中 Polars 的错误 CPU 特性检测。
+
+    PyInstaller 打包的 Windows 环境会让 Polars 1.40 的 CPU 检测把已知的
+    ``sse3`` 标记误判为未知，导致应用在导入阶段直接退出。该开关只用于
+    Windows 桌面安装包；源码运行和其他平台仍保留 Polars 的默认检测。
+    """
+    if sys.platform == "win32" and getattr(sys, "frozen", False):
+        import os
+
+        os.environ.setdefault("POLARS_SKIP_CPU_CHECK", "1")
+
+
 def _ensure_data_dir_writable() -> None:
     """确保用户数据目录可写 (lifespan 会创建子目录, 这里只验证根目录)。
 
@@ -289,6 +302,8 @@ def main() -> int:
     # 必须最先执行: console=False 下 stdout/stderr 可能无效, 不守护会导致
     # 后续 logging.basicConfig 创建的 StreamHandler 写日志时进程崩溃。
     _guard_streams()
+    # 必须在导入 app.main（其间会导入 Polars）之前配置。
+    _configure_windows_frozen_runtime()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

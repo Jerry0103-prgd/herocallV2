@@ -24,7 +24,7 @@ on:
       version:
         description: '版本号 (如 v0.1.33, 用作 Release tag 和标题)'
         required: true
-        default: 'v0.1.89'
+        default: 'v0.1.90'
       platforms:
         description: '要构建的平台 (逗号分隔: windows,macos,linux)'
         required: true
