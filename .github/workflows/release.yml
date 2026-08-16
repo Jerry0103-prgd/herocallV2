@@ -1,6 +1,6 @@
 name: 桌面客户端发布
 
-# 触发方式: 手动 (workflow_dispatch)。
+# 触发方式: 手动 (workflow_dispatch)；发布配置更新时自动构建 Windows 包。
 # 在 GitHub Actions 页面点 "Run workflow", 选择要构建的平台 + 版本号,
 # 构建完成后自动创建/更新 Release 并上传安装包。
 #
@@ -13,6 +13,12 @@ name: 桌面客户端发布
 #   gh workflow run release.yml -f version=v0.2.0 -f platforms=windows
 #   或 GitHub 网页 Actions → 桌面客户端发布 → Run workflow
 on:
+  # 发布配置更新时自动构建一份 Windows 安装包，避免首次发布必须手动触发。
+  # 日常代码变更仍保持手动发布，防止每次提交都创建 Release。
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
       version:
@@ -37,10 +43,18 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.filter.outputs.matrix }}
+      version: ${{ steps.filter.outputs.version }}
     steps:
+      - uses: actions/checkout@v4
       - id: filter
         run: |
-          REQUESTED="${{ github.event.inputs.platforms }}"
+          REQUESTED="${{ github.event.inputs.platforms || 'windows' }}"
+          VERSION_INPUT="${{ github.event.inputs.version }}"
+          if [ -n "$VERSION_INPUT" ]; then
+            VERSION="$VERSION_INPUT"
+          else
+            VERSION="v$(node -p "require('./frontend/package.json').version")"
+          fi
           # macOS 仅构建 ARM64 (Apple Silicon), 不构建 Intel:
           #   1) GitHub 最后一个原生 Intel runner (macos-13) 已于 2025-12-04 退役;
           #   2) 项目依赖 polars, 而 polars 自 1.33 起移除了 macOS x86_64 原生 wheel
@@ -50,13 +64,14 @@ jobs:
           # 按 input 过滤平台 (macos → arm64 单项)
           python3 -c "
           import json, sys
-          requested = '${{ github.event.inputs.platforms }}'.split(',')
+          requested = '$REQUESTED'.split(',')
           requested = [r.strip() for r in requested if r.strip()]
           all_platforms = json.loads('''$ALL''')
           selected = [p for p in all_platforms if p['platform'] in requested]
           print('matrix=' + json.dumps({'include': selected}))
           with open('$GITHUB_OUTPUT', 'a') as f:
               f.write('matrix=' + json.dumps({'include': selected}) + '\n')
+              f.write('version=${VERSION}\n')
           "
 
   # 第二步: 各平台并行构建
@@ -203,21 +218,21 @@ jobs:
       - name: 上传到 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: ${{ github.event.inputs.version }}
+          tag_name: ${{ needs.prepare.outputs.version }}
+          name: ${{ needs.prepare.outputs.version }}
           files: ${{ matrix.artifact }}
-          prerelease: ${{ github.event.inputs.prerelease }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
           generate_release_notes: true   # 自动从 commit 生成 changelog
           body: |
-            ## 桌面客户端 ${{ github.event.inputs.version }}
+            ## 桌面客户端 ${{ needs.prepare.outputs.version }}
 
             ### ⬇️ 下载
 
             | 平台 | 文件 | 下载 |
             | :--- | :--- | :--- |
-            | **Windows x64** | `HeroCall-Setup-x64.exe` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/HeroCall-Setup-x64.exe) |
-            | **macOS (Apple Silicon / M 系列芯片)** | `HeroCall-macos-arm64.dmg` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/HeroCall-macos-arm64.dmg) |
-            | **Linux** | `HeroCall-linux-x64.tar.gz` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.version }}/HeroCall-linux-x64.tar.gz) |
+            | **Windows x64** | `HeroCall-Setup-x64.exe` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.version }}/HeroCall-Setup-x64.exe) |
+            | **macOS (Apple Silicon / M 系列芯片)** | `HeroCall-macos-arm64.dmg` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.version }}/HeroCall-macos-arm64.dmg) |
+            | **Linux** | `HeroCall-linux-x64.tar.gz` | [⬇️ 立即下载](https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.version }}/HeroCall-linux-x64.tar.gz) |
 
             > 💡 点击「立即下载」直接获取, 无需滚动到底部附件区。
             > 🍎 **macOS 仅提供 Apple Silicon (M 系列芯片) 版本**: 点左上角  → "关于本机", 看"芯片"一项是否为 Apple; Intel 芯片 Mac 暂不支持 (上游 polars 已停止发布 Intel wheel)。
@@ -227,7 +242,7 @@ jobs:
             - **macOS**: 双击 dmg 打开, 将 HERO CALL 拖入 Applications 文件夹; 首次启动需右键→打开(绕过 Gatekeeper)
             - **Linux**: 解压后运行可执行文件
             - 数据存储在安装目录下的 `data/` 子文件夹, 卸载重装不丢数据
-            - 内置 Polars 兼容内核, 新老 CPU (无 AVX2) 均可运行
+            - Windows 包使用标准 x64 Polars 内核
             - 含纯 Polars 回测引擎; 不含 vectorbt 回测(为控制体积)
             - 系统通知: 设置 → 实时监控 → 系统通知
             - 检查更新: 设置 → 系统设置 → 关于
