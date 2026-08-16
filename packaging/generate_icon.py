@@ -1,15 +1,6 @@
-"""生成应用图标 — 白色 squircle 背景 + 紫色 Logo。
+"""从 HERO CALL 品牌主图生成跨平台应用图标。
 
-设计 (与 frontend Logo.tsx / favicon.svg 一致):
-  背景: 白色 squircle (macOS Big Sur+ 要求不透明 squircle 背景, 用白色填充)
-  内容: 紫色 #5B21B6 方括号 + K线 (上影短/下影长, bullish 站稳)
-
-蜡烛几何 (32x32 viewBox):
-  wick: y=7 ~ y=25
-  body: y=9 ~ y=19 (偏上)
-  → 上影 = 2 (短), 下影 = 6 (长)
-
-每尺寸独立绘制: 线条占比全尺寸统一 (~9.4%), 小尺寸微调补偿, 不随尺寸递减。
+品牌主图: hero-call-icon.png（鼠标乘火箭）。
 运行: python packaging/generate_icon.py
 产物:
   packaging/icon.ico   — Windows (16/32/48/64/128/256)
@@ -23,6 +14,7 @@ from PIL import Image, ImageDraw
 
 OUT_ICO = Path(__file__).parent / "icon.ico"
 OUT_ICNS = Path(__file__).parent / "icon.icns"
+SOURCE_ICON = Path(__file__).parent / "hero-call-icon.png"
 
 # 背景: 白色 squircle (不透明, macOS 规范)
 BG = (255, 255, 255, 255)
@@ -86,6 +78,16 @@ def draw_logo(size: int) -> Image.Image:
         return _draw(size, sw_b=4.0, sw_w=3.4, body_w=8)
 
 
+def load_brand_icon(size: int) -> Image.Image:
+    """使用单一主图生成所有平台尺寸，保证浏览器与桌面端视觉一致。"""
+    with Image.open(SOURCE_ICON) as source:
+        image = source.convert("RGBA")
+        side = min(image.size)
+        left = (image.width - side) // 2
+        top = (image.height - side) // 2
+        return image.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
+
+
 def _save_ico(images_by_size: dict[int, Image.Image]) -> None:
     """Windows .ico (16/32/48/64/128/256)。主图 256 优先, 资源管理器大图清晰。"""
     sizes = [16, 32, 48, 64, 128, 256]
@@ -115,9 +117,9 @@ def _save_icns(images_by_size: dict[int, Image.Image]) -> None:
 
 
 def main() -> None:
-    # 一次绘制所有用到的尺寸 (ico 和 icns 取并集), 避免重复绘制
+    # 从同一品牌主图派生所有尺寸，避免平台间图标不一致。
     all_sizes = {16, 32, 48, 64, 128, 256, 512}
-    images_by_size = {sz: draw_logo(sz) for sz in all_sizes}
+    images_by_size = {sz: load_brand_icon(sz) for sz in all_sizes}
     _save_ico(images_by_size)
     _save_icns(images_by_size)
 

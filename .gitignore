@@ -105,7 +105,8 @@ packaging/designs/
 packaging/install.log
 packaging/installed_run.log
 # macOS 本地构建产物 (PyInstaller .app 与 create-dmg 产出的 .dmg,根目录产出)
-TickFlowStockPanel.app/
-TickFlowStockPanel-macos*.dmg
-TickFlowStockPanel-macos*.zip
+HeroCall.app/
+HeroCall-macos*.dmg
+HeroCall-macos*.zip
+HERO-CALL-macos*.dmg
 reports/cursor_tickflow_pro_rate_limit_p0.bundle
