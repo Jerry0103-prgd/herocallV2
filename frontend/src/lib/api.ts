@@ -1115,6 +1115,8 @@ export const api = {
     request<{ ok: boolean; ai_provider?: string; ai_model?: string; ai_codex_command?: string; ai_codex_reasoning_effort?: string; ai_configured?: boolean }>('/api/settings/ai', {
       method: 'POST',
       body: JSON.stringify(ai),
+      // 设置页面会给出更明确的“保存失败”提示，避免与通用请求 Toast 重复。
+      quiet: true,
     }),
 
   /** 一键清空 AI 配置(保留自定义 UA) */

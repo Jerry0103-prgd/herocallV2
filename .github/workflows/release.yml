@@ -1,6 +1,6 @@
 name: 桌面客户端发布
 
-# 触发方式: 手动 (workflow_dispatch)；发布配置更新时自动构建 Windows 包。
+# 触发方式: 手动 (workflow_dispatch)；发布配置更新时自动构建 macOS 包。
 # 在 GitHub Actions 页面点 "Run workflow", 选择要构建的平台 + 版本号,
 # 构建完成后自动创建/更新 Release 并上传安装包。
 #
@@ -10,10 +10,10 @@ name: 桌面客户端发布
 #   - 版本号通过 input 传入, 与 tag 解耦, 更灵活
 #
 # 使用:
-#   gh workflow run release.yml -f version=v0.2.0 -f platforms=windows
+#   gh workflow run release.yml -f version=v0.2.0 -f platforms=macos
 #   或 GitHub 网页 Actions → 桌面客户端发布 → Run workflow
 on:
-  # 发布配置更新时自动构建一份 Windows 安装包，避免首次发布必须手动触发。
+  # 发布配置更新时自动构建一份 macOS 安装包，避免首次发布必须手动触发。
   # 日常代码变更仍保持手动发布，防止每次提交都创建 Release。
   push:
     branches: [main]
@@ -24,11 +24,11 @@ on:
       version:
         description: '版本号 (如 v0.1.33, 用作 Release tag 和标题)'
         required: true
-        default: 'v0.1.91'
+        default: 'v0.1.92'
       platforms:
         description: '要构建的平台 (逗号分隔: windows,macos,linux)'
         required: true
-        default: 'windows'
+        default: 'macos'
       prerelease:
         description: '是否为预发布 (勾选则标记为 Pre-release)'
         type: boolean
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: filter
         run: |
-          REQUESTED="${{ github.event.inputs.platforms || 'windows' }}"
+          REQUESTED="${{ github.event.inputs.platforms || 'macos' }}"
           VERSION_INPUT="${{ github.event.inputs.version }}"
           if [ -n "$VERSION_INPUT" ]; then
             VERSION="$VERSION_INPUT"

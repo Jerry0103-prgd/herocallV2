@@ -8,6 +8,7 @@ import {
 import { useSettings } from '@/lib/useSharedQueries'
 import { api, type SettingsState } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
+import { toast } from '@/components/Toast'
 
 // 统一的输入框样式(与项目其他设置页一致)
 const INPUT_CLS =
@@ -145,7 +146,11 @@ export function SettingsAIPanel() {
         } : {}),
       } : prev)
       qc.invalidateQueries({ queryKey: QK.settings })
+      toast('AI 配置已保存', 'success')
       setTimeout(() => setSaved(false), 2000)
+    },
+    onError: (error: Error) => {
+      toast(`保存失败 · ${error.message || '请检查配置后重试'}`, 'error')
     },
   })
 
